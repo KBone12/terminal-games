@@ -1,7 +1,15 @@
+use std::io::{stdin, stdout, Read, Write};
+
 use clap::{crate_authors, crate_description, crate_name, crate_version, Arg};
 use rand::{
     self,
     distributions::{Bernoulli, Distribution},
+};
+use termion::{
+    self,
+    cursor::{Goto, HideCursor},
+    raw::IntoRawMode,
+    screen::AlternateScreen,
 };
 
 #[derive(Clone, Copy, PartialEq)]
@@ -82,32 +90,28 @@ fn generate_board(width: usize, height: usize, rate: f64, max_bombs: usize) -> V
     board
 }
 
-fn print_board<R: AsRef<[CellState]>>(board: &[R]) {
-    board.iter().for_each(|row| {
+fn draw<W: Write, R: AsRef<[CellState]>>(out: &mut W, board: &[R], (x0, y0): (u16, u16)) {
+    write!(out, "{}", Goto(x0, y0)).unwrap();
+    board.iter().enumerate().for_each(|(y, row)| {
         row.as_ref().iter().for_each(|cell| match cell {
             CellState::Empty { count, hidden } => {
-                /*
                 if *hidden {
-                    print!("*");
+                    write!(out, "*").unwrap();
                 } else {
-                    print!("{}", count);
+                    write!(out, "{}", count).unwrap();
                 }
-                */
-                print!("{}", count);
             }
             CellState::Bomb { hidden } => {
-                /*
                 if *hidden {
-                    print!("*");
+                    write!(out, "*").unwrap();
                 } else {
-                    print!("X");
+                    write!(out, "X").unwrap();
                 }
-                */
-                print!("X");
             }
         });
-        println!("");
+        write!(out, "{}", Goto(x0, y0 + y as u16 + 1)).unwrap();
     });
+    out.flush().unwrap();
 }
 
 fn main() {
@@ -136,12 +140,14 @@ fn main() {
         .value_of("width")
         .and_then(|width| width.parse::<usize>().ok())
         .unwrap_or(8);
-    let width = width.max(1);
     let height = arguments
         .value_of("height")
         .and_then(|height| height.parse::<usize>().ok())
         .unwrap_or(8);
-    let height = height.max(1);
+    let (width, height) = {
+        let (tw, th) = termion::terminal_size().unwrap();
+        (width.max(1).min(tw as _), height.max(1).min(th as _))
+    };
     let max_bombs = arguments
         .value_of("bombs")
         .and_then(|bombs| bombs.parse::<usize>().ok())
@@ -150,5 +156,16 @@ fn main() {
     let bomb_rate = max_bombs as f64 / (width * height) as f64;
     let board = generate_board(width, height, bomb_rate, max_bombs);
 
-    print_board(&board);
+    let mut screen = {
+        let screen = AlternateScreen::from(stdout());
+        let screen = HideCursor::from(screen);
+        screen.into_raw_mode().unwrap()
+    };
+
+    draw(&mut screen, &board, (2, 2));
+
+    {
+        let mut buf = b" ".to_owned();
+        stdin().read(&mut buf).unwrap();
+    }
 }
