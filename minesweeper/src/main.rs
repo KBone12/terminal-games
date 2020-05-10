@@ -164,7 +164,7 @@ fn main() {
     let max_bombs = arguments
         .value_of("bombs")
         .and_then(|bombs| bombs.parse::<usize>().ok())
-        .unwrap_or(4);
+        .unwrap_or(width * height / 10);
     let max_bombs = max_bombs.min(width * height - 1);
     let mut board = generate_board(width, height, max_bombs);
 
