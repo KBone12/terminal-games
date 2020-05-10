@@ -7,8 +7,8 @@ use rand::{
 };
 use termion::{
     self,
-    cursor::{Goto, HideCursor},
-    event::{Event, Key},
+    cursor::{Goto, SteadyBlock},
+    event::{Event, Key, MouseButton, MouseEvent},
     input::{MouseTerminal, TermRead},
     raw::IntoRawMode,
     screen::AlternateScreen,
@@ -16,7 +16,7 @@ use termion::{
 
 #[derive(Clone, Copy, PartialEq)]
 enum CellState {
-    Empty { count: i8, hidden: bool },
+    Empty { count: u8, hidden: bool },
     Bomb { hidden: bool },
 }
 
@@ -93,25 +93,28 @@ fn generate_board(width: usize, height: usize, rate: f64, max_bombs: usize) -> V
 }
 
 fn draw<W: Write, R: AsRef<[CellState]>>(out: &mut W, board: &[R], (x0, y0): (u16, u16)) {
-    write!(out, "{}", Goto(x0, y0)).unwrap();
     board.iter().enumerate().for_each(|(y, row)| {
-        row.as_ref().iter().for_each(|cell| match cell {
-            CellState::Empty { count, hidden } => {
-                if *hidden {
-                    write!(out, "*").unwrap();
-                } else {
-                    write!(out, "{}", count).unwrap();
+        let line: String = row
+            .as_ref()
+            .iter()
+            .map(|cell| match cell {
+                CellState::Empty { count, hidden } => {
+                    if *hidden {
+                        '*'
+                    } else {
+                        (count + '0' as u8) as char
+                    }
                 }
-            }
-            CellState::Bomb { hidden } => {
-                if *hidden {
-                    write!(out, "*").unwrap();
-                } else {
-                    write!(out, "X").unwrap();
+                CellState::Bomb { hidden } => {
+                    if *hidden {
+                        '*'
+                    } else {
+                        'X'
+                    }
                 }
-            }
-        });
-        write!(out, "{}", Goto(x0, y0 + y as u16 + 1)).unwrap();
+            })
+            .collect();
+        write!(out, "{}{}", Goto(x0, y0 + y as u16), line).unwrap();
     });
     out.flush().unwrap();
 }
@@ -138,22 +141,21 @@ fn main() {
         )
         .get_matches();
 
-    let width = arguments
-        .value_of("width")
-        .and_then(|width| width.parse::<usize>().ok())
-        .unwrap_or(8);
-    let height = arguments
-        .value_of("height")
-        .and_then(|height| height.parse::<usize>().ok())
-        .unwrap_or(8);
     let (width, height) = {
+        let width = arguments
+            .value_of("width")
+            .and_then(|width| width.parse::<usize>().ok());
+        let height = arguments
+            .value_of("height")
+            .and_then(|height| height.parse::<usize>().ok());
         let (tw, th) = termion::terminal_size().unwrap();
+        let (tw, th) = (tw as usize, th as usize);
         if tw < 3 && th < 3 {
             panic!("The terminal is too small!");
         }
         (
-            width.max(1).min(tw as usize - 2),
-            height.max(1).min(th as usize - 2),
+            width.unwrap_or(tw - 2).max(1).min(tw - 2),
+            height.unwrap_or(th - 2).max(1).min(th - 2),
         )
     };
     let max_bombs = arguments
@@ -167,16 +169,26 @@ fn main() {
     let mut screen = {
         let screen = AlternateScreen::from(stdout());
         let screen = MouseTerminal::from(screen);
-        let screen = HideCursor::from(screen);
         screen.into_raw_mode().unwrap()
     };
+    writeln!(&mut screen, "{}", SteadyBlock).unwrap();
+
+    let offset = (2, 2);
+    let mut cursor_position = offset;
 
     let mut events = stdin()
         .events()
         .take_while(|event| event.is_ok())
         .filter_map(|event| event.ok());
     'game_loop: loop {
-        draw(&mut screen, &board, (2, 2));
+        draw(&mut screen, &board, offset);
+        write!(
+            &mut screen,
+            "{}",
+            Goto(cursor_position.0, cursor_position.1)
+        )
+        .unwrap();
+        screen.flush().unwrap();
 
         let event = match events.next() {
             Some(event) => event,
@@ -184,6 +196,68 @@ fn main() {
         };
         match event {
             Event::Key(Key::Esc) => break 'game_loop,
+            Event::Key(key) => match key {
+                Key::Char('h') => {
+                    if cursor_position.0 >= offset.0 + 1 {
+                        cursor_position.0 -= 1;
+                    }
+                }
+                Key::Char('j') => {
+                    if cursor_position.1 + 1 < offset.1 + height as u16 {
+                        cursor_position.1 += 1;
+                    }
+                }
+                Key::Char('k') => {
+                    if cursor_position.1 >= offset.1 + 1 {
+                        cursor_position.1 -= 1;
+                    }
+                }
+                Key::Char('l') => {
+                    if cursor_position.0 + 1 < offset.0 + width as u16 {
+                        cursor_position.0 += 1;
+                    }
+                }
+                Key::Char('y') => {
+                    if cursor_position.0 >= offset.0 + 1 && cursor_position.1 >= offset.1 + 1 {
+                        cursor_position.0 -= 1;
+                        cursor_position.1 -= 1;
+                    }
+                }
+                Key::Char('u') => {
+                    if cursor_position.0 + 1 < offset.0 + width as u16
+                        && cursor_position.1 >= offset.1 + 1
+                    {
+                        cursor_position.0 += 1;
+                        cursor_position.1 -= 1;
+                    }
+                }
+                Key::Char('b') => {
+                    if cursor_position.0 >= offset.0 + 1
+                        && cursor_position.1 + 1 < offset.1 + height as u16
+                    {
+                        cursor_position.0 -= 1;
+                        cursor_position.1 += 1;
+                    }
+                }
+                Key::Char('n') => {
+                    if cursor_position.0 + 1 < offset.0 + width as u16
+                        && cursor_position.1 + 1 < offset.1 + height as u16
+                    {
+                        cursor_position.0 += 1;
+                        cursor_position.1 += 1;
+                    }
+                }
+                _ => {}
+            },
+            Event::Mouse(MouseEvent::Press(MouseButton::Left, x, y)) => {
+                if x >= offset.0
+                    && x < offset.0 + width as u16
+                    && y >= offset.1
+                    && y < offset.1 + height as u16
+                {
+                    cursor_position = (x, y);
+                }
+            }
             _ => {}
         }
     }
