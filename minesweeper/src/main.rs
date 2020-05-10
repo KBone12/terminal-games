@@ -6,6 +6,28 @@ enum CellState {
     Bomb { hidden: bool },
 }
 
+fn print_board<R: AsRef<[CellState]>>(board: &[R]) {
+    board.iter().for_each(|row| {
+        row.as_ref().iter().for_each(|cell| match cell {
+            CellState::Empty { count, hidden } => {
+                if *hidden {
+                    print!("*");
+                } else {
+                    print!("{}", count);
+                }
+            }
+            CellState::Bomb { hidden } => {
+                if *hidden {
+                    print!("*");
+                } else {
+                    print!("X");
+                }
+            }
+        });
+        println!("");
+    });
+}
+
 fn main() {
     let width = 8;
     let height = 8;
@@ -67,15 +89,5 @@ fn main() {
         }
     }
 
-    board.iter().for_each(|row| {
-        row.iter().for_each(|cell| match cell {
-            CellState::Empty { count, .. } => {
-                print!("{}", count);
-            }
-            CellState::Bomb { .. } => {
-                print!("X");
-            }
-        });
-        println!("");
-    });
+    print_board(&board);
 }
