@@ -146,7 +146,13 @@ fn main() {
         .unwrap_or(8);
     let (width, height) = {
         let (tw, th) = termion::terminal_size().unwrap();
-        (width.max(1).min(tw as _), height.max(1).min(th as _))
+        if tw < 3 && th < 3 {
+            panic!("The terminal is too small!");
+        }
+        (
+            width.max(1).min(tw as usize - 2),
+            height.max(1).min(th as usize - 2),
+        )
     };
     let max_bombs = arguments
         .value_of("bombs")
