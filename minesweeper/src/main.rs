@@ -3,7 +3,7 @@ use std::io::{stdin, stdout, Write};
 use clap::{crate_authors, crate_description, crate_name, crate_version, Arg};
 use rand::{
     self,
-    distributions::{Bernoulli, Distribution},
+    distributions::{Distribution, Uniform},
 };
 use termion::{
     self,
@@ -29,9 +29,10 @@ impl CellState {
     }
 }
 
-fn generate_board(width: usize, height: usize, rate: f64, max_bombs: usize) -> Vec<Vec<CellState>> {
+fn generate_board(width: usize, height: usize, max_bombs: usize) -> Vec<Vec<CellState>> {
     let rng = rand::thread_rng();
-    let mut samples = Bernoulli::new(rate).unwrap().sample_iter(rng);
+    let mut y_samples = Uniform::new(0, height).sample_iter(rng);
+    let mut x_samples = Uniform::new(0, width).sample_iter(rng);
     let mut bombs = 0;
     let mut board = vec![
         vec![
@@ -45,16 +46,11 @@ fn generate_board(width: usize, height: usize, rate: f64, max_bombs: usize) -> V
     ];
 
     while bombs < max_bombs {
-        for y in 0..height {
-            for x in 0..width {
-                if board[y][x].is_bomb() {
-                    continue;
-                }
-                if bombs < max_bombs && samples.next().unwrap() {
-                    board[y][x] = CellState::Bomb { hidden: true };
-                    bombs += 1;
-                }
-            }
+        let y = y_samples.next().unwrap();
+        let x = x_samples.next().unwrap();
+        if board[y][x].is_empty() {
+            board[y][x] = CellState::Bomb { hidden: true };
+            bombs += 1;
         }
     }
 
@@ -163,8 +159,7 @@ fn main() {
         .and_then(|bombs| bombs.parse::<usize>().ok())
         .unwrap_or(4);
     let max_bombs = max_bombs.min(width * height - 1);
-    let bomb_rate = max_bombs as f64 / (width * height) as f64;
-    let board = generate_board(width, height, bomb_rate, max_bombs);
+    let board = generate_board(width, height, max_bombs);
 
     let mut screen = {
         let screen = AlternateScreen::from(stdout());
