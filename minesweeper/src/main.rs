@@ -1,3 +1,4 @@
+use clap::{crate_authors, crate_description, crate_name, crate_version, Arg};
 use rand::{
     self,
     distributions::{Bernoulli, Distribution},
@@ -110,9 +111,42 @@ fn print_board<R: AsRef<[CellState]>>(board: &[R]) {
 }
 
 fn main() {
-    let width = 8;
-    let height = 8;
-    let max_bombs = 4;
+    let arguments = clap::app_from_crate!()
+        .arg(
+            Arg::with_name("width")
+                .long("width")
+                .help("the board's width")
+                .takes_value(true),
+        )
+        .arg(
+            Arg::with_name("height")
+                .long("height")
+                .help("the board's height")
+                .takes_value(true),
+        )
+        .arg(
+            Arg::with_name("bombs")
+                .long("bombs")
+                .help("the number of bombs")
+                .takes_value(true),
+        )
+        .get_matches();
+
+    let width = arguments
+        .value_of("width")
+        .and_then(|width| width.parse::<usize>().ok())
+        .unwrap_or(8);
+    let width = width.max(1);
+    let height = arguments
+        .value_of("height")
+        .and_then(|height| height.parse::<usize>().ok())
+        .unwrap_or(8);
+    let height = height.max(1);
+    let max_bombs = arguments
+        .value_of("bombs")
+        .and_then(|bombs| bombs.parse::<usize>().ok())
+        .unwrap_or(4);
+    let max_bombs = max_bombs.min(width * height - 1);
     let bomb_rate = max_bombs as f64 / (width * height) as f64;
     let board = generate_board(width, height, bomb_rate, max_bombs);
 
