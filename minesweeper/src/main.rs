@@ -1,4 +1,4 @@
-use std::io::{stdin, stdout, Read, Write};
+use std::io::{stdin, stdout, Write};
 
 use clap::{crate_authors, crate_description, crate_name, crate_version, Arg};
 use rand::{
@@ -8,6 +8,8 @@ use rand::{
 use termion::{
     self,
     cursor::{Goto, HideCursor},
+    event::{Event, Key},
+    input::{MouseTerminal, TermRead},
     raw::IntoRawMode,
     screen::AlternateScreen,
 };
@@ -164,14 +166,25 @@ fn main() {
 
     let mut screen = {
         let screen = AlternateScreen::from(stdout());
+        let screen = MouseTerminal::from(screen);
         let screen = HideCursor::from(screen);
         screen.into_raw_mode().unwrap()
     };
 
-    draw(&mut screen, &board, (2, 2));
+    let mut events = stdin()
+        .events()
+        .take_while(|event| event.is_ok())
+        .filter_map(|event| event.ok());
+    'game_loop: loop {
+        draw(&mut screen, &board, (2, 2));
 
-    {
-        let mut buf = b" ".to_owned();
-        stdin().read(&mut buf).unwrap();
+        let event = match events.next() {
+            Some(event) => event,
+            None => break 'game_loop,
+        };
+        match event {
+            Event::Key(Key::Esc) => break 'game_loop,
+            _ => {}
+        }
     }
 }
