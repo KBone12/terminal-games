@@ -21,6 +21,13 @@ enum CellState {
 }
 
 impl CellState {
+    pub fn open(&mut self) {
+        match self {
+            CellState::Empty { hidden, .. } => *hidden = false,
+            CellState::Bomb { hidden } => *hidden = false,
+        }
+    }
+
     pub fn is_empty(&self) -> bool {
         matches!(self, CellState::Empty { .. })
     }
@@ -159,7 +166,7 @@ fn main() {
         .and_then(|bombs| bombs.parse::<usize>().ok())
         .unwrap_or(4);
     let max_bombs = max_bombs.min(width * height - 1);
-    let board = generate_board(width, height, max_bombs);
+    let mut board = generate_board(width, height, max_bombs);
 
     let mut screen = {
         let screen = AlternateScreen::from(stdout());
@@ -242,6 +249,11 @@ fn main() {
                         cursor_position.1 += 1;
                     }
                 }
+                Key::Char('\n') | Key::Char(' ') => {
+                    board[(cursor_position.1 - offset.1) as usize]
+                        [(cursor_position.0 - offset.0) as usize]
+                        .open();
+                }
                 _ => {}
             },
             Event::Mouse(MouseEvent::Press(MouseButton::Left, x, y)) => {
@@ -251,6 +263,7 @@ fn main() {
                     && y < offset.1 + height as u16
                 {
                     cursor_position = (x, y);
+                    board[(y - offset.1) as usize][(x - offset.0) as usize].open();
                 }
             }
             _ => {}
