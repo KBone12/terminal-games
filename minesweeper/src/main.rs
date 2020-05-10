@@ -21,10 +21,16 @@ enum CellState {
 }
 
 impl CellState {
-    pub fn open(&mut self) {
+    pub fn open(&mut self) -> bool {
         match self {
-            CellState::Empty { hidden, .. } => *hidden = false,
-            CellState::Bomb { hidden } => *hidden = false,
+            CellState::Empty { hidden, .. } => {
+                *hidden = false;
+                false
+            }
+            CellState::Bomb { hidden } => {
+                *hidden = false;
+                true
+            }
         }
     }
 
@@ -105,7 +111,11 @@ fn draw<W: Write, R: AsRef<[CellState]>>(out: &mut W, board: &[R], (x0, y0): (u1
                     if *hidden {
                         '*'
                     } else {
-                        (count + '0' as u8) as char
+                        if *count == 0 {
+                            '.'
+                        } else {
+                            (count + '0' as u8) as char
+                        }
                     }
                 }
                 CellState::Bomb { hidden } => {
@@ -180,6 +190,7 @@ fn main() {
         ((tw - width as u16) / 2 + 1, (th - height as u16) / 2 + 1)
     };
     let mut cursor_position = offset;
+    let mut remaining = width * height - max_bombs;
 
     let mut events = stdin()
         .events()
@@ -195,6 +206,7 @@ fn main() {
         .unwrap();
         screen.flush().unwrap();
 
+        let mut bomb = false;
         let event = match events.next() {
             Some(event) => event,
             None => break 'game_loop,
@@ -253,9 +265,12 @@ fn main() {
                     }
                 }
                 Key::Char('\n') | Key::Char(' ') => {
-                    board[(cursor_position.1 - offset.1) as usize]
+                    bomb = board[(cursor_position.1 - offset.1) as usize]
                         [(cursor_position.0 - offset.0) as usize]
                         .open();
+                    if !bomb {
+                        remaining -= 1;
+                    }
                 }
                 _ => {}
             },
@@ -266,10 +281,75 @@ fn main() {
                     && y < offset.1 + height as u16
                 {
                     cursor_position = (x, y);
-                    board[(y - offset.1) as usize][(x - offset.0) as usize].open();
+                    bomb = board[(y - offset.1) as usize][(x - offset.0) as usize].open();
+                    if !bomb {
+                        remaining -= 1;
+                    }
                 }
             }
             _ => {}
+        }
+        if bomb {
+            board.iter_mut().for_each(|row| {
+                row.iter_mut().for_each(|cell| {
+                    cell.open();
+                });
+            });
+            draw(&mut screen, &board, offset);
+
+            let messages = [
+                "                 ",
+                "      Bomb!      ",
+                " [Press any key] ",
+                "                 ",
+            ];
+            let (tw, th) = termion::terminal_size().unwrap();
+            let x0 = (tw - messages[0].len() as u16) / 2 + 1;
+            let y0 = (th - messages.len() as u16) / 2 + 1;
+            write!(&mut screen, "{}", Goto(x0, y0)).unwrap();
+            messages.iter().enumerate().for_each(|(y, message)| {
+                writeln!(&mut screen, "{}{}", Goto(x0, y0 + y as u16), message).unwrap();
+            });
+            write!(
+                &mut screen,
+                "{}",
+                Goto(cursor_position.0, cursor_position.1)
+            )
+            .unwrap();
+            screen.flush().unwrap();
+            stdin().keys().next();
+            break 'game_loop;
+        }
+        if remaining == 0 {
+            board.iter_mut().for_each(|row| {
+                row.iter_mut().for_each(|cell| {
+                    cell.open();
+                });
+            });
+            draw(&mut screen, &board, offset);
+
+            let messages = [
+                "                 ",
+                "     Clear!      ",
+                " [Press any key] ",
+                "                 ",
+            ];
+            let (tw, th) = termion::terminal_size().unwrap();
+            let x0 = (tw - messages[0].len() as u16) / 2 + 1;
+            let y0 = (th - messages.len() as u16) / 2 + 1;
+            write!(&mut screen, "{}", Goto(x0, y0)).unwrap();
+            messages.iter().enumerate().for_each(|(y, message)| {
+                writeln!(&mut screen, "{}{}", Goto(x0, y0 + y as u16), message).unwrap();
+            });
+            write!(
+                &mut screen,
+                "{}",
+                Goto(cursor_position.0, cursor_position.1)
+            )
+            .unwrap();
+            screen.flush().unwrap();
+            stdin().keys().next();
+            break 'game_loop;
         }
     }
 }
