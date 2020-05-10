@@ -175,7 +175,10 @@ fn main() {
     };
     writeln!(&mut screen, "{}", SteadyBlock).unwrap();
 
-    let offset = (2, 2);
+    let offset = {
+        let (tw, th) = termion::terminal_size().unwrap();
+        ((tw - width as u16) / 2 + 1, (th - height as u16) / 2 + 1)
+    };
     let mut cursor_position = offset;
 
     let mut events = stdin()
