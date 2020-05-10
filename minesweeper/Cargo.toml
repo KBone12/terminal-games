@@ -10,3 +10,4 @@ description = "Simple minesweeper"
 [dependencies]
 clap = "2.33.0"
 rand = "0.7.3"
+termion = "1.5.5"
